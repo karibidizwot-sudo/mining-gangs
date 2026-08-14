@@ -405,6 +405,12 @@
   <button id="lbtn" style="background:rgba(22,25,37,.85);border:1px solid var(--line);
     border-radius:999px;padding:4px 12px;font-size:11px;color:var(--dim);cursor:pointer;
     font-family:inherit;font-weight:700">EN</button>
+  <input id="mp-url" placeholder="wss://...ngrok-free.app" style="width:150px;background:rgba(22,25,37,.85);
+    border:1px solid var(--line);border-radius:999px;padding:4px 10px;font-size:11px;color:var(--fg);
+    font-family:inherit">
+  <button id="mp-connect" style="background:rgba(22,25,37,.85);border:1px solid var(--line);
+    border-radius:999px;padding:4px 12px;font-size:11px;color:var(--dim);cursor:pointer;
+    font-family:inherit;font-weight:700">🌐 Подключить</button>
   <div id="who" style="display:none"><b id="who-n"></b><button id="who-out">выйти</button></div>
   <div class="wallet" id="wallet">
     <img class="ic" src="art/sprites/coin_band.png" alt=""><b id="w-band">—</b>
@@ -3967,6 +3973,13 @@ function roadBetween(from, to) {
 }
 document.getElementById('w-march').onclick = () => {
   if (!wSelected) return;
+  /* Мультиплеер: марш запускает и разрешает сервер (общий для всех друзей),
+     локально ничего не двигаем — марш появится, когда придёт world_march_started. */
+  if (typeof MP !== 'undefined' && MP.connected) {
+    MP.send('launch_world_march', { toIdx: PROVINCES.indexOf(wSelected) });
+    document.getElementById('wpanel').style.display = 'none';
+    return;
+  }
   const home = PROVINCES[2];
   const { road, dir } = roadBetween(home, wSelected);
   worldMarches.push({ road, t: dir > 0 ? 0 : 1, dir, from: home, to: wSelected, gang: 0, col: GANGS[0].c });
@@ -4007,8 +4020,18 @@ function resolveWorldMarch(m) {
 function drawWorldMarches() {
   for (let i = worldMarches.length - 1; i >= 0; i--) {
     const m = worldMarches[i];
-    m.t += .06 * m.dir / 60 * 3;
-    const done = m.dir > 0 ? m.t >= 1 : m.t <= 0;
+    /* Марши из мультиплеера (_mpId) идут по времени сервера — так у всех
+       друзей, независимо от FPS и момента подключения, колонна в один и тот
+       же миг стоит в одной и той же точке дороги. Разрешает их тоже сервер:
+       мы просто убираем маршрут по приходу world_march_resolved (см. MP). */
+    let done;
+    if (m._mpId) {
+      m.t = Math.max(0, Math.min(1, (Date.now() - m.startTime) / m.durationMs));
+      done = false;
+    } else {
+      m.t += .06 * m.dir / 60 * 3;
+      done = m.dir > 0 ? m.t >= 1 : m.t <= 0;
+    }
     for (let k = 0; k < 3; k++) {                 // колонна из трёх машин
       const tt = Math.max(0, Math.min(1, m.t - k * .035 * m.dir));
       const [x, y] = bez(m.road, tt);
@@ -4031,6 +4054,10 @@ function drawWorldMarches() {
    дорога длиннее), и только между уже разведанными землями — под туманом
    маршей не бывает, туда сначала нужно послать Шныря.                       */
 setInterval(() => {
+  /* В мультиплеере ботов мира и добычу провинций считает сервер один раз на
+     всех и рассылает — если считать их ещё и локально, карта будет дважды
+     жить своей жизнью и разъезжаться между друзьями. */
+  if (typeof MP !== 'undefined' && MP.connected) return;
   if (worldMarches.length >= 1) return;
   const froms = PROVINCES.filter(p => p.gang >= 1 && p.explored);         // боты — банды 1 и 2
   const tos = PROVINCES.filter(p => p.explored && p.store > 300 && p.type !== 'wind' && p.type !== 'center');
@@ -4048,6 +4075,7 @@ setInterval(() => {
 /* Разведанные провинции копят добычу сами, как кварталы города — иначе после
    пары маршей грабить на карте нечего, и живой мир на ней снова замирает. */
 setInterval(() => {
+  if (typeof MP !== 'undefined' && MP.connected) return;   // сервер уже прислал/пришлёт provinces_tick
   for (const p of PROVINCES) {
     if (!p.explored || p === WORLD_HOME) continue;
     p.store = Math.min(6000, p.store + Math.round(140 + Math.random() * 260));
@@ -4082,6 +4110,7 @@ function worldClick(e) {
     worldCv = null;                       // мир перерисуется уже с огнями района
     beacons.length = 0; goldBeacons.length = 0; windmillsW.length = 0; barges.length = 0;
     toast(`Шнырь разведал: ${p.name}. Теперь туда можно ходить маршем.`);
+    if (typeof MP !== 'undefined' && MP.connected) MP.send('explore_province', { idx: PROVINCES.indexOf(p) });
     return;
   }
   showWorldPanel(p);
@@ -4299,6 +4328,7 @@ setInterval(tickNpcEconomy, 1500);
 /* Отель меняет хозяина, даже пока игрок в гараже. Раз в «неделю» по таймеру
    KVK.next — побеждает та банда, у которой больше кварталов и счёта.        */
 setInterval(() => {
+  if (typeof MP !== 'undefined' && MP.connected) return; // сервер решает борьбу сам и шлёт kvk_state
   if (Date.now() < KVK.next) return;
   /* Пока банды нет, слот 0 в борьбе не участвует: иначе отель достаётся
      игроку, который для этого ничего не сделал, — и вся ветка обесценивается.
@@ -4490,6 +4520,15 @@ function bindCreate() {
        выходила бесплатной, и главный сток монеты в модели в прототипе просто
        не существовал. Теперь платим по-настоящему: 250 суточных сгорают.    */
     if (!spendBand(GANG_COST_BAND)) return;
+    /* Мультиплеер: банда общая на всех друзей — создаёт её сервер (первый,
+       кто нажал), а MY.gang выставляется по ответу gang_state, чтобы у
+       создателя и у тех, кто автоматически вступит следом, всё совпало. */
+    if (typeof MP !== 'undefined' && MP.connected) {
+      MP.send('create_gang', { name: draft.name.trim(), shape: draft.shape, sym: draft.sym, color: draft.color });
+      evShow('bg_gang_made.jpg', `БАНДА «${draft.name.trim()}»`,
+        `${GANG_COST_BAND.toLocaleString('ru')} BAND сожжено и вернулось в резерв. Зови людей — вместимость ${capacity()}.`);
+      return;
+    }
     MY.gang = {
       name: draft.name.trim(), shape: draft.shape, sym: draft.sym, color: draft.color,
       members: [{ name: 'ТЫ', role: 'главарь', av: 'av_player.png', online: true, boss: true }],
@@ -5646,6 +5685,9 @@ function kvkRender() {
   const go = document.getElementById('kvk-go');
   if (go) go.onclick = () => {
     QST.kvk = true;
+    /* Мультиплеер: заявку и борьбу считает сервер (сила = реальный онлайн
+       друзей), результат придёт как kvk_result/kvk_state и обновит экран. */
+    if (typeof MP !== 'undefined' && MP.connected) { MP.send('kvk_contribute', {}); return; }
     const push = 1.5;                       // демо: доложили из казны
     const mineS = kvkStrength(0) + push;
     const best = rivals.reduce((a, b) => a.s > b.s ? a : b);
@@ -6761,6 +6803,154 @@ for (const id of ['a-name', 'a-pw', 'a-pw2'])
 
 setInterval(accSave, 10000);                  // прогресс не должен зависеть от памяти игрока
 addEventListener('beforeunload', accSave);
+
+/* ======================= МУЛЬТИПЛЕЕР (МИР) =================================
+   Опционально: если задан адрес сервера друга (?mp=wss://... в ссылке или
+   поле в шапке), подключаемся, и большая карта — провинции, мировые марши,
+   борьба за отель — становятся общими для всех, кто на том же сервере. Без
+   адреса всё работает как раньше, полностью локально. Гараж/рынок/задания/
+   баланс/сохранения этот модуль не трогает вовсе — они всегда только твои.
+   Кварталы районов (city-уровень, «войти в район») тоже остаются локальными
+   в этой версии — общий мир сейчас только на уровне большой карты.        */
+const MP = {
+  ws: null, connected: false, url: '', myName: '', reconnectTimer: null, reconnectDelay: 1000,
+  connect(url) {
+    if (!url) return;
+    this.url = url;
+    STORE.set('mg_mp_url', url);
+    clearTimeout(this.reconnectTimer);
+    try { if (this.ws) { this.ws.onclose = null; this.ws.close(); } } catch (e) {}
+    let ws;
+    try { ws = new WebSocket(url); } catch (e) { toast('Не удалось подключиться: неверный адрес.'); return; }
+    this.ws = ws;
+    ws.onopen = () => {
+      this.connected = true;
+      this.reconnectDelay = 1000;
+      this.myName = (ACC.name || ('ИГРОК' + Math.floor(Math.random() * 900 + 100)));
+      this.send('hello', { name: this.myName });
+      toast('Мультиплеер подключён: большая карта общая с друзьями.');
+      const b = document.getElementById('mp-connect');
+      if (b) { b.textContent = '🌐 Онлайн'; b.style.color = 'var(--green)'; }
+    };
+    ws.onmessage = (ev) => {
+      let msg; try { msg = JSON.parse(ev.data); } catch (e) { return; }
+      this.onMessage(msg.type, msg.data);
+    };
+    ws.onclose = () => {
+      this.connected = false;
+      const b = document.getElementById('mp-connect');
+      if (b) { b.textContent = '🌐 Подключить'; b.style.color = 'var(--dim)'; }
+      this.reconnectTimer = setTimeout(() => this.connect(this.url), Math.min(15000, (this.reconnectDelay *= 1.6)));
+    };
+    ws.onerror = () => {};
+  },
+  send(type, data) { if (this.connected && this.ws) this.ws.send(JSON.stringify({ type, data })); },
+  onMessage(type, data) {
+    if (type === 'state_sync') return applyMpStateSync(data);
+    if (type === 'gang_state') return applyMpGangState(data);
+    if (type === 'world_march_started') return applyMpMarchStarted(data);
+    if (type === 'world_march_resolved') return applyMpMarchResolved(data);
+    if (type === 'province_update') return applyMpProvinceUpdate([data]);
+    if (type === 'provinces_tick') return applyMpProvinceUpdate(data);
+    if (type === 'kvk_state') return applyMpKvkState(data);
+    if (type === 'kvk_result') return applyMpKvkResult(data);
+  },
+};
+
+function applyMpProvinceUpdate(list) {
+  let touched = false;
+  for (const u of list) {
+    const p = PROVINCES[u.i];
+    if (!p) continue;
+    if ('gang' in u) p.gang = u.gang;
+    if ('store' in u) p.store = u.store;
+    if ('hash' in u) p.hash = u.hash;
+    if ('explored' in u && u.explored && !p.explored) { p.explored = true; touched = true; }
+    touched = true;
+  }
+  if (touched) worldCv = null;
+}
+
+function applyMpGangState(data) {
+  for (let i = 0; i < 3 && i < GANGS.length && data.gangs[i]; i++) {
+    GANGS[i].name = data.gangs[i].name; GANGS[i].c = data.gangs[i].c; GANGS[i].score = data.gangs[i].score;
+  }
+  if (data.myGang) {
+    const wasNoGang = !MY.gang;
+    MY.gang = {
+      name: data.myGang.name, shape: data.myGang.shape, sym: data.myGang.sym, color: data.myGang.color,
+      members: data.myGang.members, treasury: data.myGang.treasury, flags: data.myGang.flags,
+      arena: data.myGang.arena, spent: data.myGang.spent, desc: data.myGang.desc,
+      minHash: data.myGang.minHash, donated: data.myGang.donated,
+    };
+    MY.crest = crestCanvas({ shape: data.myGang.shape, sym: data.myGang.sym, color: data.myGang.color }, 128);
+    if (wasNoGang) {
+      document.getElementById('legend').innerHTML = GANGS.map(g =>
+        `<div class="gang"><div class="dot" style="background:${g.c};box-shadow:0 0 6px ${g.c}"></div>${g.name}</div>`).join('');
+      rebuildStatic();
+    }
+    if (document.getElementById('gang').classList.contains('on')) gangRender();
+  } else {
+    MY.gang = null;
+  }
+  if (document.getElementById('kvk').classList.contains('on')) kvkRender();
+}
+
+function applyMpMarchStarted(m, silent) {
+  const home = PROVINCES[m.fromIdx], to = PROVINCES[m.toIdx];
+  if (!to) return;
+  worldMarches.push({
+    _mpId: m.id, road: m.road, t: m.dir > 0 ? 0 : 1, dir: m.dir,
+    from: home, to, gang: m.gang, col: m.col,
+    startTime: m.startTime, durationMs: m.durationMs,
+  });
+  if (!silent && m.gang === 0) toast(`Марш вышел на ${to.name}. Дорога видна всем — за ним могут пойти.`);
+}
+function applyMpMarchResolved(r) {
+  const idx = worldMarches.findIndex(m => m._mpId === r.id);
+  if (idx >= 0) worldMarches.splice(idx, 1);
+  const to = PROVINCES[r.toIdx];
+  if (!to) return;
+  to.gang = r.newGang;
+  worldCv = null;
+  if (r.gang === 0) {
+    toast(`Марш дошёл: ${to.name}. Унесено ${r.taken.toLocaleString('ru')} BAND${r.flipped ? ', район взят' : ''}, очки арены выросли.`);
+    if (r.flipped) evShow('bg_flag.jpg', 'РАЙОН ВЗЯТ', `${to.name} теперь под твоим цветом.`);
+  } else if (r.flipped && (r.newGang === 0)) {
+    toast(`${GANGS[r.gang] ? GANGS[r.gang].name : 'Банда'} забрала ${to.name}.`);
+  }
+}
+function applyMpKvkState(k) {
+  Object.assign(KVK, k);
+  if (document.getElementById('kvk').classList.contains('on')) kvkRender();
+}
+function applyMpKvkResult(r) {
+  if (r.won) toast(`Отель взят! Коек ${KVK.beds} — по числу твоих людей. Содержание пошло.`);
+  else toast(`Не хватило: ${r.mineS.toFixed(1)} против ${r.bestS.toFixed(1)} у ${r.bestGang}. Взнос сгорел, зови людей онлайн.`);
+  kvkRender();
+}
+function applyMpStateSync(s) {
+  applyMpProvinceUpdate(s.provinces);
+  worldMarches.length = 0;
+  for (const m of s.worldMarches) applyMpMarchStarted(m, true); // тихо, без тостов при первом входе
+  applyMpGangState(s);
+  Object.assign(KVK, s.kvk);
+  if (document.getElementById('kvk').classList.contains('on')) kvkRender();
+}
+
+(() => {
+  const input = document.getElementById('mp-url');
+  const btn = document.getElementById('mp-connect');
+  const saved = STORE.get('mg_mp_url') || '';
+  if (input && saved) input.value = saved;
+  if (btn) btn.onclick = () => {
+    const url = (input && input.value.trim()) || '';
+    if (!url) { toast('Вставь адрес сервера друга (wss://...).'); return; }
+    MP.connect(url);
+  };
+  const fromLink = new URLSearchParams(location.search).get('mp');
+  if (fromLink) { if (input) input.value = fromLink; MP.connect(fromLink); }
+})();
 
 loadArt(() => {
   rebuildStatic();
