@@ -767,8 +767,13 @@ function shadowUnder(c, x, y, rx, a = .38) {
 /* заливка произвольного пути текстурой поверх уже нарисованного */
 const _patCache = new Map();
 function texFill(c, im, x, y, w, h, alpha, scale = 1) {
-  if (!ok(im)) return;
-  const key = im.src + '|' + scale;
+  /* 14.08: ok() проверяет im.complete/naturalWidth — это поля <img>, у
+     процедурного canvas-тайла (кирпич) их нет, и проверка всегда молча
+     проваливалась, из-за чего кладка вообще не рисовалась. canvas готов
+     сразу же, как только у него есть ширина. */
+  const ready = im instanceof HTMLCanvasElement ? im.width > 0 : ok(im);
+  if (!ready) return;
+  const key = (im.src || im._cacheKey || (im._cacheKey = 'cv' + (++texFill._n || (texFill._n = 1)))) + '|' + scale;
   let p = _patCache.get(key);
   if (!p) {
     p = c.createPattern(im, 'repeat');
@@ -776,6 +781,38 @@ function texFill(c, im, x, y, w, h, alpha, scale = 1) {
     _patCache.set(key, p);
   }
   c.save(); c.globalAlpha = alpha; c.fillStyle = p; c.fillRect(x, y, w, h); c.restore();
+}
+/* 14.08: кирпичная кладка для стен гаража — процедурно, тем же путём, что и
+   остальные текстуры (createPattern одинаково берёт и Image, и canvas), без
+   зависимости от арт-генератора: тот рисует в фотореалистичном стиле (фото
+   серверных стоек), который будет чужеродно смотреться на плоской
+   изометрической сцене гаража — проверено на уже сгенерённых int_workshop.png
+   и site_garage_v3.png. Тайл кэшируется один раз. */
+let _brickTileCv = null;
+function brickTile() {
+  if (_brickTileCv) return _brickTileCv;
+  const cv = document.createElement('canvas');
+  cv.width = 96; cv.height = 48;
+  const g = cv.getContext('2d');
+  g.fillStyle = '#9c8a76';                  // шов (раствор) — виден в зазорах
+  g.fillRect(0, 0, 96, 48);
+  const BW = 32, BH = 16, GAP = 2;
+  const shades = ['#8a4636', '#96503e', '#7c3d2e', '#8f4a39', '#7a3a2c', '#a15840'];
+  let n = 0;
+  for (let row = -1; row < 4; row++) {
+    const offset = (((row % 2) + 2) % 2) ? BW / 2 : 0;
+    for (let col = -1; col < 4; col++) {
+      const x = col * BW + offset, y = row * BH;
+      g.fillStyle = shades[(n++ * 7 + row * 3 + col * 5 + 11) % shades.length];
+      g.fillRect(x + GAP / 2, y + GAP / 2, BW - GAP, BH - GAP);
+      g.fillStyle = 'rgba(0,0,0,.12)';        // лёгкая тень снизу кирпича — объём
+      g.fillRect(x + GAP / 2, y + BH - GAP - 2, BW - GAP, 2);
+      g.fillStyle = 'rgba(255,255,255,.05)';  // блик сверху
+      g.fillRect(x + GAP / 2, y + GAP / 2, BW - GAP, 1.5);
+    }
+  }
+  _brickTileCv = cv;
+  return cv;
 }
 
 /* --- изометрия --- */
@@ -2618,8 +2655,8 @@ function drawGarage() {
       GC.beginPath();
       GC.moveTo(x, y - th / 2); GC.lineTo(x + tw / 2, y); GC.lineTo(x, y + th / 2); GC.lineTo(x - tw / 2, y);
       GC.closePath();
-      GC.fillStyle = (i + j) % 2 ? '#14161f' : '#171a25'; GC.fill();
-      GC.strokeStyle = '#0d0f16'; GC.lineWidth = 1; GC.stroke();
+      GC.fillStyle = (i + j) % 2 ? '#191714' : '#1c1a17'; GC.fill();
+      GC.strokeStyle = '#100e0c'; GC.lineWidth = 1; GC.stroke();
     }
   /* бетон поверх плитки: клип по ромбу пола, чтобы текстура не лезла на стены */
   if (ok(ART.texFloor)) {
@@ -2642,21 +2679,33 @@ function drawGarage() {
     GC.beginPath(); GC.arc(0, 0, r * S, 0, 7); GC.fill(); GC.restore();
   }
 
-  /* ЗАДНЯЯ-ЛЕВАЯ стена (ребро i=0): бетон, вытяжка */
+  /* ЗАДНЯЯ-ЛЕВАЯ стена (ребро i=0): кирпич, вытяжка.
+     14.08: раньше был холодный флэт-металл-панель ('#2b3254') — по просьбе
+     переделано на тёплую кирпичную кладку, подходит гаражному кооперативу
+     из лора игры лучше, чем безликий металл. */
   {
     const [p0x, p0y] = at(0, 0), [p1x, p1y] = at(0, RM);
-    GC.fillStyle = '#2b3254';
+    GC.fillStyle = '#6b3a2c';
     GC.beginPath();
     GC.moveTo(p0x, p0y - th / 2); GC.lineTo(p1x, p1y - th / 2);
     GC.lineTo(p1x, p1y - th / 2 - WH); GC.lineTo(p0x, p0y - th / 2 - WH);
     GC.closePath(); GC.fill();
-    if (ok(ART.texWall)) {                       // металл-панель на стене
+    {                                              // кирпичная кладка
       GC.save(); GC.clip();
       const wx0 = Math.min(p0x, p1x), wx1 = Math.max(p0x, p1x);
-      texFill(GC, ART.texWall, wx0, p0y - th / 2 - WH, wx1 - wx0, WH + th, .38, .5);
+      texFill(GC, brickTile(), wx0, p0y - th / 2 - WH, wx1 - wx0, WH + th, .96, .60);
+      GC.restore();
+      /* лёгкая тень у пола — кладка не висит в воздухе */
+      const shg = GC.createLinearGradient(0, p0y - th / 2 - S * .5, 0, p0y - th / 2);
+      shg.addColorStop(0, 'rgba(0,0,0,0)'); shg.addColorStop(1, 'rgba(0,0,0,.32)');
+      GC.save(); GC.beginPath();
+      GC.moveTo(p0x, p0y - th / 2); GC.lineTo(p1x, p1y - th / 2);
+      GC.lineTo(p1x, p1y - th / 2 - WH); GC.lineTo(p0x, p0y - th / 2 - WH);
+      GC.closePath(); GC.clip();
+      GC.fillStyle = shg; GC.fillRect(wx0, p0y - th / 2 - WH, wx1 - wx0, WH + th);
       GC.restore();
     }
-    GC.strokeStyle = 'rgba(255,255,255,.045)'; GC.lineWidth = 1;
+    GC.strokeStyle = 'rgba(255,225,190,.06)'; GC.lineWidth = 1;
     for (let k = 1; k < 4; k++) {
       const t = k / 4;
       GC.beginPath();
@@ -2668,13 +2717,13 @@ function drawGarage() {
     const fx = p0x + (p1x - p0x) * .42, fy = p0y + (p1y - p0y) * .42 - th / 2 - WH * .40;
     GC.save(); GC.translate(fx, fy); GC.scale(1, .6);
     GC.fillStyle = '#0b0d14'; GC.beginPath(); GC.arc(0, 0, S * .40, 0, 7); GC.fill();
-    GC.strokeStyle = '#2a3050'; GC.lineWidth = 3; GC.stroke();
+    GC.strokeStyle = '#3a2c22'; GC.lineWidth = 3; GC.stroke();
     ANIM.fan = { fx, fy };
     GC.restore();
     if (gar.fan) { GC.globalAlpha = .5 + .3 * Math.sin(T * 3); GC.drawImage(G_GREEN, fx - 8, fy + S * .30); GC.globalAlpha = 1; }
     /* плакат с киркой */
     const px2 = p0x + (p1x - p0x) * .76, py2 = p0y + (p1y - p0y) * .76 - th / 2 - WH * .34;
-    GC.fillStyle = '#20263c'; GC.fillRect(px2 - S * .16, py2 - S * .22, S * .32, S * .44);
+    GC.fillStyle = '#241a14'; GC.fillRect(px2 - S * .16, py2 - S * .22, S * .32, S * .44);
     GC.strokeStyle = P.gold + '55'; GC.lineWidth = 1; GC.strokeRect(px2 - S * .16, py2 - S * .22, S * .32, S * .44);
     if (!spr(GC, ART.symPick, px2, py2 + S * .16, S * .26, .95)) {
       GC.fillStyle = P.gold; GC.font = '700 ' + (S * .18 | 0) + 'px Segoe UI';
@@ -2687,21 +2736,34 @@ function drawGarage() {
     const [q0x, q0y] = at(0, 0), [q1x, q1y] = at(RM, 0);
     const px = t => q0x + (q1x - q0x) * t, py = t => q0y + (q1y - q0y) * t - th / 2;
     const dA = .34, dB = .84, DH = WH * .62;       // проём
-    GC.fillStyle = '#222846';
+    GC.fillStyle = '#6b3a2c';
     GC.beginPath(); GC.moveTo(px(0), py(0)); GC.lineTo(px(dA), py(dA));
     GC.lineTo(px(dA), py(dA) - WH); GC.lineTo(px(0), py(0) - WH); GC.closePath(); GC.fill();
     GC.beginPath(); GC.moveTo(px(dB), py(dB)); GC.lineTo(px(1), py(1));
     GC.lineTo(px(1), py(1) - WH); GC.lineTo(px(dB), py(dB) - WH); GC.closePath(); GC.fill();
+    GC.fillStyle = '#8f8577';                      // бетонная перемычка над воротами
     GC.beginPath(); GC.moveTo(px(dA), py(dA) - DH); GC.lineTo(px(dB), py(dB) - DH);
     GC.lineTo(px(dB), py(dB) - WH); GC.lineTo(px(dA), py(dA) - WH); GC.closePath(); GC.fill();
-    if (ok(ART.texFloor)) {                       // бетон на правой стене
+    {                                              // кирпич на боковых простенках ворот
       GC.save();
       GC.beginPath();
-      GC.moveTo(px(0), py(0)); GC.lineTo(px(1), py(1));
-      GC.lineTo(px(1), py(1) - WH); GC.lineTo(px(0), py(0) - WH); GC.closePath();
+      GC.moveTo(px(0), py(0)); GC.lineTo(px(dA), py(dA));
+      GC.lineTo(px(dA), py(dA) - WH); GC.lineTo(px(0), py(0) - WH); GC.closePath();
+      GC.moveTo(px(dB), py(dB)); GC.lineTo(px(1), py(1));
+      GC.lineTo(px(1), py(1) - WH); GC.lineTo(px(dB), py(dB) - WH); GC.closePath();
       GC.clip();
       const rx0 = Math.min(px(0), px(1)), rx1 = Math.max(px(0), px(1));
-      texFill(GC, ART.texFloor, rx0, py(0) - WH - th, rx1 - rx0, WH + th * 2, .28, .45);
+      texFill(GC, brickTile(), rx0, py(0) - WH, rx1 - rx0, WH + th, .96, .60);
+      GC.restore();
+    }
+    if (ok(ART.texFloor)) {                       // фактура на бетонной перемычке
+      GC.save();
+      GC.beginPath();
+      GC.moveTo(px(dA), py(dA) - DH); GC.lineTo(px(dB), py(dB) - DH);
+      GC.lineTo(px(dB), py(dB) - WH); GC.lineTo(px(dA), py(dA) - WH); GC.closePath();
+      GC.clip();
+      const rx0 = Math.min(px(dA), px(dB)), rx1 = Math.max(px(dA), px(dB));
+      texFill(GC, ART.texFloor, rx0, py(dA) - WH - th, rx1 - rx0, WH + th * 2, .30, .5);
       GC.restore();
     }
     /* рама ворот */
@@ -2783,12 +2845,12 @@ function drawGarage() {
   /* кромки стен: верх и угловой стык — стены перестают сливаться с ночью */
   {
     const [c0x, c0y] = at(0, 0), [l1x, l1y] = at(0, RM), [r1x, r1y] = at(RM, 0);
-    GC.strokeStyle = 'rgba(150,165,220,.28)'; GC.lineWidth = 1.5;
+    GC.strokeStyle = 'rgba(210,190,160,.30)'; GC.lineWidth = 1.5;
     GC.beginPath();
     GC.moveTo(l1x, l1y - th / 2 - WH); GC.lineTo(c0x, c0y - th / 2 - WH);
     GC.lineTo(r1x, r1y - th / 2 - WH);
     GC.stroke();
-    GC.strokeStyle = 'rgba(150,165,220,.36)'; GC.lineWidth = 2;
+    GC.strokeStyle = 'rgba(210,190,160,.38)'; GC.lineWidth = 2;
     GC.beginPath(); GC.moveTo(c0x, c0y - th / 2); GC.lineTo(c0x, c0y - th / 2 - WH); GC.stroke();
     /* плинтус */
     GC.strokeStyle = 'rgba(0,0,0,.5)'; GC.lineWidth = 2.5;
@@ -2925,6 +2987,14 @@ function drawGarage() {
       CX.drawImage(gold ? G_GOLD : G_GREEN, x - 22 * PACK_SCALE, y - hh * .5 - 22 * PACK_SCALE, 44 * PACK_SCALE, 44 * PACK_SCALE);
       CX.globalAlpha = 1;
       spr(CX, dusty(rigImg, gar.dust), x, y + th * .18, wpx);
+      /* 14.08: лёгкий блик сверху — металл читается объёмнее, менее "картонно" */
+      CX.save();
+      CX.globalCompositeOperation = 'lighter';
+      const hl = CX.createLinearGradient(x, y - hh * 1.1, x, y - hh * .25);
+      hl.addColorStop(0, 'rgba(255,255,255,.16)'); hl.addColorStop(1, 'rgba(255,255,255,0)');
+      CX.fillStyle = hl;
+      CX.fillRect(x - wpx * .42, y - hh * 1.15, wpx * .84, hh * .95);
+      CX.restore();
       if (gar.broken && n === 1) {             // деградировавший асик искрит
         CX.globalAlpha = .5 + .5 * Math.sin(T * 9);
         CX.fillStyle = '#ff5d6c';
