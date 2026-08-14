@@ -198,19 +198,23 @@
   #gbtn{background:rgba(22,25,37,.85);border:1px solid var(--line);border-radius:999px;
     padding:4px 12px;font-size:11px;color:var(--green);cursor:pointer;font-family:inherit;font-weight:700}
   /* ======================= ЭКРАН БАНДЫ ======================= */
-  #gang,#kvk,#shop,#arenaw,#asics,#market{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;
+  #gang,#kvk,#shop,#arenaw,#asics,#market,#mail{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;
     background:rgba(5,6,11,.82);backdrop-filter:blur(5px)}
-  #gang.on,#kvk.on,#shop.on,#arenaw,#asics.on,#market.on{display:flex}
-  #gang .wrap,#kvk .wrap,#shop .wrap,#arenaw,#asics .wrap,#market .wrap{position:relative;width:min(940px,94vw);max-height:92vh;overflow:auto;
+  #gang.on,#kvk.on,#shop.on,#arenaw,#asics.on,#market.on,#mail.on{display:flex}
+  #gang .wrap,#kvk .wrap,#shop .wrap,#arenaw,#asics .wrap,#market .wrap,#mail .wrap{position:relative;width:min(940px,94vw);max-height:92vh;overflow:auto;
     background:#0f1220 center/cover;border:1px solid rgba(245,197,66,.35);border-radius:18px;
     box-shadow:0 30px 90px rgba(0,0,0,.7)}
-  #gang .veil,#kvk .veil,#shop .veil,#arenaw,#asics .veil,#market .veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,12,20,.62),rgba(10,12,20,.86))}
-  #gang .in,#kvk .in,#shop .in,#arenaw,#asics .in,#market .in{position:relative;z-index:2;padding:22px 26px 26px}
-  #gang h2,#kvk h2,#shop h2,#arenaw,#asics h2,#market h2{font-size:19px;letter-spacing:1px}
+  #gang .veil,#kvk .veil,#shop .veil,#arenaw,#asics .veil,#market .veil,#mail .veil{position:absolute;inset:0;background:linear-gradient(180deg,rgba(10,12,20,.62),rgba(10,12,20,.86))}
+  #gang .in,#kvk .in,#shop .in,#arenaw,#asics .in,#market .in,#mail .in{position:relative;z-index:2;padding:22px 26px 26px}
+  #gang h2,#kvk h2,#shop h2,#arenaw,#asics h2,#market h2,#mail h2{font-size:19px;letter-spacing:1px}
   #gang h2 span{color:var(--gold)}
-  #gang .sub,#kvk .sub,#shop .sub,#arenaw,#asics .sub,#market .sub{color:var(--dim);font-size:11.5px;margin:3px 0 16px}
-  #gang .close,#kvk .close,#shop .close,#arenaw,#asics .close,#market .close{position:absolute;right:14px;top:12px;z-index:3;background:none;border:none;
+  #gang .sub,#kvk .sub,#shop .sub,#arenaw,#asics .sub,#market .sub,#mail .sub{color:var(--dim);font-size:11.5px;margin:3px 0 16px}
+  #gang .close,#kvk .close,#shop .close,#arenaw,#asics .close,#market .close,#mail .close{position:absolute;right:14px;top:12px;z-index:3;background:none;border:none;
     color:var(--dim);font-size:20px;cursor:pointer;font-family:inherit}
+  #mail .wrap{width:min(540px,92vw)}
+  .mail-item{border-left:2px solid var(--line);padding:8px 10px;border-radius:0 8px 8px 0;background:rgba(255,255,255,.03);font-size:12.5px;line-height:1.4}
+  .mail-item .mt{color:var(--dim);font-size:10.5px;margin-top:2px}
+  .mail-empty{color:var(--dim);font-size:12.5px;text-align:center;padding:30px 10px}
   #gang .cols,#kvk .cols,#shop .cols,#arenaw,#asics .cols,#market .cols{display:flex;gap:22px;flex-wrap:wrap}
   #gang .col,#kvk .col,#shop .col,#arenaw,#asics .col,#market .col{flex:1 1 300px;min-width:280px}
   #gang .box,#kvk .box,#shop .box,#arenaw,#asics .box,#market .box{background:rgba(16,19,30,.86);border:1px solid var(--line);border-radius:13px;padding:14px}
@@ -551,6 +555,14 @@
   </div>
 </div>
 
+<div id="mail">
+  <div class="wrap" id="mail-wrap">
+    <div class="veil"></div>
+    <button class="close" id="mail-close">✕</button>
+    <div class="in" id="mail-in"></div>
+  </div>
+</div>
+
 <div class="hud" id="wpanel">
   <div class="t" id="w-type">район</div>
   <h3 id="w-name">—</h3>
@@ -789,25 +801,56 @@ function texFill(c, im, x, y, w, h, alpha, scale = 1) {
    изометрической сцене гаража — проверено на уже сгенерённых int_workshop.png
    и site_garage_v3.png. Тайл кэшируется один раз. */
 let _brickTileCv = null;
+/* 14.08 (просьба «сделать кирпич старее»): та же кладка, но состаренная —
+   грязный тёмный раствор вместо чистого бежевого, копоть и потёки к низу
+   стены (низ тайла = низ стены, кладка тайлится по вертикали), редкие
+   сколы кирпича и пятна высолов/мха в швах. Детерминированный «случай»
+   через (row,col) — тайл кэшируется один раз, но при перегенерации
+   результат стабилен, а не мигает новым узором. */
 function brickTile() {
   if (_brickTileCv) return _brickTileCv;
   const cv = document.createElement('canvas');
   cv.width = 96; cv.height = 48;
   const g = cv.getContext('2d');
-  g.fillStyle = '#9c8a76';                  // шов (раствор) — виден в зазорах
+  g.fillStyle = '#4c4238';                  // раствор — тёмный, грязный, не новодел
   g.fillRect(0, 0, 96, 48);
   const BW = 32, BH = 16, GAP = 2;
-  const shades = ['#8a4636', '#96503e', '#7c3d2e', '#8f4a39', '#7a3a2c', '#a15840'];
+  const shades = ['#6e3a2d', '#78402f', '#5f3226', '#71402f', '#582c22', '#7a4632', '#4f2a20'];
+  const rnd = (a, b) => { const v = Math.sin(a * 12.9898 + b * 78.233) * 43758.5453; return v - Math.floor(v); };
   let n = 0;
   for (let row = -1; row < 4; row++) {
     const offset = (((row % 2) + 2) % 2) ? BW / 2 : 0;
+    const nearBottom = row / 3;                          // 0 верх .. ~1 низ — копоть гуще внизу
     for (let col = -1; col < 4; col++) {
       const x = col * BW + offset, y = row * BH;
       g.fillStyle = shades[(n++ * 7 + row * 3 + col * 5 + 11) % shades.length];
       g.fillRect(x + GAP / 2, y + GAP / 2, BW - GAP, BH - GAP);
-      g.fillStyle = 'rgba(0,0,0,.12)';        // лёгкая тень снизу кирпича — объём
+      /* скол — треугольный кусок кирпича отсутствует, виден раствор */
+      if (rnd(row, col) > .86) {
+        g.fillStyle = '#463c33';
+        g.beginPath();
+        g.moveTo(x + GAP, y + BH - GAP); g.lineTo(x + GAP + 6, y + BH - GAP);
+        g.lineTo(x + GAP, y + BH - GAP - 6); g.closePath(); g.fill();
+      }
+      /* копоть/грязь — темнее и чаще к низу стены */
+      const grime = rnd(row + 5, col + 5);
+      if (grime < .35 + nearBottom * .4) {
+        g.fillStyle = `rgba(10,8,6,${(.10 + nearBottom * .22) * (1 - grime)})`;
+        g.fillRect(x + GAP / 2, y + GAP / 2, BW - GAP, BH - GAP);
+      }
+      /* высолы — редкие светлые известковые потёки в шве */
+      if (rnd(row + 11, col + 3) > .92) {
+        g.fillStyle = 'rgba(196,190,172,.16)';
+        g.fillRect(x + GAP + 4, y - GAP, 3, BH + GAP * 2);
+      }
+      /* мох в единичных швах у низа */
+      if (nearBottom > .55 && rnd(row + 20, col + 7) > .90) {
+        g.fillStyle = 'rgba(90,110,60,.20)';
+        g.beginPath(); g.arc(x + BW / 2, y + BH - 1, 4, 0, 7); g.fill();
+      }
+      g.fillStyle = 'rgba(0,0,0,.14)';        // лёгкая тень снизу кирпича — объём
       g.fillRect(x + GAP / 2, y + BH - GAP - 2, BW - GAP, 2);
-      g.fillStyle = 'rgba(255,255,255,.05)';  // блик сверху
+      g.fillStyle = 'rgba(255,255,255,.035)'; // едва заметный блик сверху — не «новый глянец»
       g.fillRect(x + GAP / 2, y + GAP / 2, BW - GAP, 1.5);
     }
   }
@@ -2550,6 +2593,7 @@ gar.mercs = [];
 for (let k = 0; k < 26; k++)
   gar.motes.push({ x: Math.random(), y: Math.random(), s: .3 + Math.random() * .9, ph: Math.random() * 7 });
 let doorRect = null;
+let mailRect = null;
 let guardHitboxes = [];
 let selectedGuard = null;
 
@@ -2595,6 +2639,7 @@ document.getElementById('g-take').onclick = () => {
 };
 function garageClick(x, y) {
   if (doorRect && x > doorRect[0] && x < doorRect[2] && y > doorRect[1] && y < doorRect[3]) { exitGarage(); return; }
+  if (mailRect && x > mailRect[0] && x < mailRect[2] && y > mailRect[1] && y < mailRect[3]) { mailOpen(); return; }
   for (const h of guardHitboxes) {
     if (x > h.x0 && x < h.x1 && y > h.y0 && y < h.y1) { selectedGuard = h.i; shopOpen(); return; }
   }
@@ -2729,6 +2774,33 @@ function drawGarage() {
       GC.fillStyle = P.gold; GC.font = '700 ' + (S * .18 | 0) + 'px Segoe UI';
       GC.textAlign = 'center'; GC.fillText('⛏', px2, py2 + S * .07);
     }
+
+    /* 14.08 (просьба): «отдельно на стене логотип банд коин» — медальон
+       ближе к воротам, подальше от вытяжки и плаката, свой купол света. */
+    const lx2 = p0x + (p1x - p0x) * .14, ly2 = p0y + (p1y - p0y) * .14 - th / 2 - WH * .62;
+    const lr = S * .30;
+    GC.save();
+    const lglow = GC.createRadialGradient(lx2, ly2, 0, lx2, ly2, lr * 2.1);
+    lglow.addColorStop(0, 'rgba(245,197,66,.20)'); lglow.addColorStop(1, 'rgba(245,197,66,0)');
+    GC.fillStyle = lglow; GC.beginPath(); GC.arc(lx2, ly2, lr * 2.1, 0, 7); GC.fill();
+    GC.fillStyle = '#161310';
+    GC.beginPath(); GC.arc(lx2, ly2, lr, 0, 7); GC.fill();
+    GC.strokeStyle = P.gold; GC.lineWidth = 3; GC.stroke();
+    GC.strokeStyle = 'rgba(0,0,0,.5)'; GC.lineWidth = 1; GC.beginPath(); GC.arc(lx2, ly2, lr - 3, 0, 7); GC.stroke();
+    if (ok(ART.coin)) {
+      GC.save();
+      GC.beginPath(); GC.arc(lx2, ly2, lr * .74, 0, 7); GC.clip();
+      GC.drawImage(ART.coin, lx2 - lr * .74, ly2 - lr * .74, lr * 1.48, lr * 1.48);
+      GC.restore();
+    } else {
+      GC.fillStyle = P.gold; GC.font = '700 ' + (lr * .62 | 0) + 'px Segoe UI';
+      GC.textAlign = 'center'; GC.fillText('₿', lx2, ly2 + lr * .22);
+    }
+    GC.font = '700 ' + (S * .075 | 0) + 'px Segoe UI'; GC.textAlign = 'center';
+    GC.fillStyle = 'rgba(230,232,240,.85)';
+    GC.fillText('BAND GANG', lx2, ly2 + lr + S * .11);
+    GC.restore();
+    ANIM.logo = { x: lx2, y: ly2, r: lr };
   }
 
   /* ЗАДНЯЯ-ПРАВАЯ стена (ребро j=0) с ВОРОТАМИ в город */
@@ -2755,6 +2827,40 @@ function drawGarage() {
       const rx0 = Math.min(px(0), px(1)), rx1 = Math.max(px(0), px(1));
       texFill(GC, brickTile(), rx0, py(0) - WH, rx1 - rx0, WH + th, .96, .60);
       GC.restore();
+    }
+
+    /* 14.08 (просьба): почтовый ящик на стене — весь журнал событий (налёты
+       на тебя/тобой, пыль, ремонт) виден кликом прямо в гараже, без похода
+       в мастерскую. Вешаем на левый простенок ворот, на уровне руки. */
+    {
+      const mx2 = px(.14), my2 = py(.14) - th / 2 - WH * .30;
+      const mw = S * .30, mh = S * .34;
+      GC.save();
+      shadowUnder(GC, mx2, my2 + mh * .45, S * .22, .22);
+      GC.fillStyle = '#1c1f2c';                       // корпус ящика
+      GC.beginPath(); GC.roundRect(mx2 - mw / 2, my2 - mh / 2, mw, mh, S * .035); GC.fill();
+      GC.strokeStyle = 'rgba(0,0,0,.55)'; GC.lineWidth = 1.5; GC.stroke();
+      GC.fillStyle = '#262a3c';                        // крышка чуть приоткрыта
+      GC.beginPath();
+      GC.moveTo(mx2 - mw / 2, my2 - mh / 2);
+      GC.lineTo(mx2 + mw / 2, my2 - mh / 2);
+      GC.lineTo(mx2 + mw / 2 - S * .02, my2 - mh / 2 - S * .07);
+      GC.lineTo(mx2 - mw / 2 + S * .02, my2 - mh / 2 - S * .07);
+      GC.closePath(); GC.fill();
+      GC.strokeStyle = 'rgba(0,0,0,.5)'; GC.lineWidth = 1; GC.stroke();
+      GC.fillStyle = '#0d0f18';                         // прорезь
+      GC.beginPath(); GC.roundRect(mx2 - mw * .32, my2 - mh * .06, mw * .64, mh * .12, 2); GC.fill();
+      GC.fillStyle = P.gold; GC.font = '700 ' + (S * .075 | 0) + 'px Segoe UI';
+      GC.textAlign = 'center'; GC.fillText('ПОЧТА', mx2, my2 + mh * .30);
+      GC.strokeStyle = 'rgba(245,197,66,.4)'; GC.lineWidth = 1;
+      GC.strokeRect(mx2 - mw / 2, my2 - mh / 2, mw, mh);
+      /* флажок — красный, если есть непрочитанные события; серый, если пусто */
+      GC.save(); GC.translate(mx2 + mw / 2, my2 - mh * .08);
+      GC.strokeStyle = '#7a7f96'; GC.lineWidth = 2;
+      GC.beginPath(); GC.moveTo(0, 0); GC.lineTo(0, -mh * .5); GC.stroke();
+      GC.restore();
+      GC.restore();
+      ANIM.mail = { x: mx2, y: my2, w: mw, h: mh };
     }
     if (ok(ART.texFloor)) {                       // фактура на бетонной перемычке
       GC.save();
@@ -2866,6 +2972,27 @@ function drawGarage() {
   CX.drawImage(drawGarage._cv, 0, 0);
   doorRect = drawGarage._door;
   const ANIM = drawGarage._anim;
+
+  /* почтовый ящик: флажок и мигающая точка живут в динамике, чтобы новое
+     событие подсвечивалось, не перерисовывая всю кэшированную стену. */
+  if (ANIM.mail) {
+    const { x: mxA, y: myA, w: mwA, h: mhA } = ANIM.mail;
+    mailRect = [mxA - mwA / 2 - 8, myA - mhA / 2 - 14, mxA + mwA / 2 + 8, myA + mhA / 2 + 10];
+    const unread = gar.log.length > (gar.mailSeen || 0);
+    CX.save(); CX.translate(mxA + mwA / 2, myA - mhA * .08 - mhA * .5);
+    CX.fillStyle = unread ? '#e5493f' : '#4a4f66';
+    CX.beginPath(); CX.moveTo(0, 0); CX.lineTo(S * .11, S * .035); CX.lineTo(0, S * .07); CX.closePath(); CX.fill();
+    CX.restore();
+    if (unread) {
+      const pulse = .55 + .45 * Math.sin(T * 4);
+      CX.save();
+      CX.globalAlpha = pulse;
+      CX.fillStyle = '#ff5a4d';
+      CX.beginPath(); CX.arc(mxA + mwA * .38, myA - mhA * .5, S * .045, 0, 7); CX.fill();
+      CX.globalAlpha = 1;
+      CX.restore();
+    }
+  }
 
   /* --- динамика поверх статики: вытяжка и щит --- */
   if (ANIM.fan) {
@@ -3121,36 +3248,76 @@ function drawGarage() {
     CX.globalAlpha = 1;
   }
 
-  /* наёмники и охрана: громилы стоят по гаражу, дышат, один курит. Охрана
-     (13.08) рисуется тем же циклом — guardSprites() отдаёт объекты той же
-     формы (ti/tj/av/c/name/role), только вместо перса с фиксированным
-     именем это динамический список из gar.guards. Хитбоксы для клика по
-     охраннику копим тут же и раз в кадр очищаем — список меняется на лету. */
+  /* наёмники и охрана: полноценная фигура в полный рост, а не «палка с
+     портретом» (просьба 14.08 — «полную модель, а не пиксель с картинкой
+     на лице»). Плечи шире бёдер, видны руки и ботинки, портрет остаётся
+     на месте головы. guardSprites() отдаёт объекты той же формы (ti/tj/
+     av/c/name/role), что и наёмники, поэтому оба списка идут одним циклом;
+     хитбоксы для клика по охраннику копим тут же и раз в кадр очищаем. */
   guardHitboxes = [];
   for (const mrc of [...garageMercs(), ...guardSprites()]) {
     const [mx, my] = at(mrc.ti, mrc.tj);
     if (mrc.guardIndex !== undefined)
-      guardHitboxes.push({ i: mrc.guardIndex, x0: mx - S * .55, y0: my - S * 1.1, x1: mx + S * .55, y1: my + S * .2 });
+      guardHitboxes.push({ i: mrc.guardIndex, x0: mx - S * .55, y0: my - S * 1.15, x1: mx + S * .55, y1: my + S * .2 });
     const br = Math.sin(T * 1.6 + mrc.ti) * 1.2;          // дыхание
-    /* тень */
+    const face = ART[mrc.av];
+    /* тень под ногами */
     CX.save(); CX.translate(mx, my); CX.scale(1, .5);
-    CX.fillStyle = 'rgba(0,0,0,.4)';
-    CX.beginPath(); CX.arc(0, 0, S * .13, 0, 7); CX.fill(); CX.restore();
-    /* ноги */
-    CX.fillStyle = '#171a26';
-    CX.fillRect(mx - S * .075, my - S * .30, S * .058, S * .30);
-    CX.fillRect(mx + S * .018, my - S * .30, S * .058, S * .30);
-    /* корпус-куртка */
+    CX.fillStyle = 'rgba(0,0,0,.42)';
+    CX.beginPath(); CX.arc(0, 0, S * .17, 0, 7); CX.fill(); CX.restore();
+
+    /* тон куртки: тёмный/светлый вариант для тени и света по бокам фигуры */
+    const cDark = shade(mrc.c, .68), cLight = shade(mrc.c, 1.22);
+
+    /* ---- ноги: бёдра + голени + ботинки, чуть расставлены для устойчивости ---- */
+    const hipY = my - S * .40, legW = S * .072;
+    for (const side of [-1, 1]) {
+      const lx = mx + side * S * .058;
+      CX.fillStyle = side < 0 ? cDark : mrc.c;             // штаны в цвет формы, потемнее с одной стороны
+      CX.beginPath(); CX.roundRect(lx - legW / 2, hipY, legW, S * .28, S * .02); CX.fill();
+      CX.fillStyle = '#14151d';                             // ботинок
+      CX.beginPath(); CX.roundRect(lx - legW / 2 - 1, my - S * .05, legW + 2, S * .08, S * .018); CX.fill();
+    }
+
+    /* ---- торс: сужается к поясу, шире в плечах — читается объём, а не прямоугольник ---- */
+    const shY = my - S * .68 + br, waY = my - S * .40;
+    const shW = S * .21, waW = S * .15;
     CX.fillStyle = mrc.c;
     CX.beginPath();
-    CX.roundRect(mx - S * .095, my - S * .62 + br, S * .19, S * .34, S * .05);
-    CX.fill();
-    /* голова: если портрет подгрузился — рисуем лицо, иначе кружок как раньше */
-    const face = ART[mrc.av];
-    const hy = my - S * .70 + br;
+    CX.moveTo(mx - shW / 2, shY); CX.lineTo(mx + shW / 2, shY);
+    CX.lineTo(mx + waW / 2, waY); CX.lineTo(mx - waW / 2, waY);
+    CX.closePath(); CX.fill();
+    CX.fillStyle = cDark; CX.globalAlpha = .55;             // тень с правой стороны торса
+    CX.beginPath();
+    CX.moveTo(mx + shW * .12, shY); CX.lineTo(mx + shW / 2, shY);
+    CX.lineTo(mx + waW / 2, waY); CX.lineTo(mx + waW * .12, waY);
+    CX.closePath(); CX.fill(); CX.globalAlpha = 1;
+    CX.fillStyle = cLight; CX.globalAlpha = .35;             // блик слева
+    CX.beginPath();
+    CX.moveTo(mx - shW / 2, shY); CX.lineTo(mx - shW * .18, shY);
+    CX.lineTo(mx - waW * .18, waY); CX.lineTo(mx - waW / 2, waY);
+    CX.closePath(); CX.fill(); CX.globalAlpha = 1;
+    CX.strokeStyle = '#14151d'; CX.lineWidth = 1;            // ремень на поясе
+    CX.beginPath(); CX.moveTo(mx - waW / 2, waY - 2); CX.lineTo(mx + waW / 2, waY - 2); CX.stroke();
+
+    /* ---- руки: от плеча вдоль корпуса, с кистью у бедра ---- */
+    for (const side of [-1, 1]) {
+      const ax = mx + side * (shW / 2 - S * .01), ay0 = shY + S * .02;
+      CX.fillStyle = side < 0 ? cLight : cDark;
+      CX.beginPath();
+      CX.roundRect(ax - S * .026 + side * S * .01, ay0, S * .052, S * .24, S * .022);
+      CX.fill();
+      CX.fillStyle = '#c9a184';                              // кисть
+      CX.beginPath(); CX.arc(ax + side * S * .01, ay0 + S * .25, S * .026, 0, 7); CX.fill();
+    }
+
+    /* ---- голова: портрет, если загрузился, иначе кружок как раньше ---- */
+    const hy = shY - S * .10;
     if (ok(face)) {
-      const r = S * .105;
+      const r = S * .108;
       shadowUnder(CX, mx, my, S * .16, .25);
+      CX.fillStyle = '#c9a184';                              // шея
+      CX.fillRect(mx - S * .03, hy + r * .55, S * .06, S * .07);
       CX.save();
       CX.beginPath(); CX.arc(mx, hy - r * .35, r, 0, 7); CX.clip();
       CX.drawImage(face, mx - r, hy - r * 1.35, r * 2, r * 2);
@@ -3159,23 +3326,24 @@ function drawGarage() {
       CX.beginPath(); CX.arc(mx, hy - r * .35, r, 0, 7); CX.stroke();
     } else {
       CX.fillStyle = '#c9a184';
-      CX.beginPath(); CX.arc(mx, hy, S * .062, 0, 7); CX.fill();
+      CX.fillRect(mx - S * .03, hy + S * .01, S * .06, S * .06);
+      CX.beginPath(); CX.arc(mx, hy - S * .045, S * .062, 0, 7); CX.fill();
       CX.fillStyle = '#0f1220';
-      CX.beginPath(); CX.arc(mx, my - S * .725 + br, S * .062, Math.PI, 0); CX.fill();
+      CX.beginPath(); CX.arc(mx, hy - S * .11, S * .062, Math.PI, 0); CX.fill();
     }
     /* сигарета */
     if (mrc.smoke) {
       const em = .5 + .5 * Math.sin(T * 2.4);
       CX.fillStyle = `rgba(255,120,60,${.4 + .6 * em})`;
-      CX.fillRect(mx + S * .07, my - S * .69 + br, 2.5, 2.5);
+      CX.fillRect(mx + S * .07, hy - S * .04, 2.5, 2.5);
       CX.globalAlpha = .16;
       CX.fillStyle = '#aab';
       CX.beginPath();
-      CX.arc(mx + S * .09 + Math.sin(T) * 3, my - S * .78 + br - (T * 8 % 20), 3 + (T * 8 % 20) / 4, 0, 7);
+      CX.arc(mx + S * .09 + Math.sin(T) * 3, hy - S * .13 - (T * 8 % 20), 3 + (T * 8 % 20) / 4, 0, 7);
       CX.fill();
       CX.globalAlpha = 1;
     }
-    const top = ok(face) ? my - S * 1.00 + br : my - S * .88 + br;
+    const top = hy - S * .30;
     /* бейдж */
     CX.font = '700 ' + Math.max(9, S * .085 | 0) + 'px Segoe UI';
     CX.textAlign = 'center';
@@ -5094,6 +5262,8 @@ setInterval(() => {
   const now = Date.now(), dt = Math.min(5000, now - _mineT) / DAY_MS;   // в «сутках»
   _mineT = now;
   if (gar.autoDays <= 0) gar.dust = Math.min(1, gar.dust + dt * (gar.fan ? .25 : .5));
+  if (gar.dust >= .7 && !gar._dustWarned) { gar._dustWarned = true; logEvent('dust', 'Пыль на асиках выше 70% — пора продуть, иначе перегреются.'); }
+  if (gar.dust < .3) gar._dustWarned = false;
   gar.store += dayYield() * dt;
 }, 250);
 /* журнал (13.08): последние события «нападал/напали» — не только суммы,
@@ -5103,7 +5273,34 @@ const RAID_LOG_MAX = 30;
 function logEvent(kind, text) {
   gar.log.unshift({ t: Date.now(), kind, text });
   if (gar.log.length > RAID_LOG_MAX) gar.log.length = RAID_LOG_MAX;
+  if (typeof mailPing === 'function') mailPing();
 }
+
+/* почтовый ящик (14.08): та же лента gar.log, что и в мастерской, но
+   отдельным окном по клику на ящик в самом гараже — не нужно лезть в
+   мастерскую, чтобы узнать, кто на кого напал и что с асиками. */
+const MAIL_ICONS = { in: '⚔', out: '🗡', dust: '🌫', power: '⚡', fix: '🔧' };
+function mailOpen() { document.getElementById('mail').classList.add('on'); gar.mailSeen = gar.log.length; mailRender(); }
+function mailClose() { document.getElementById('mail').classList.remove('on'); }
+function mailPing() {
+  const dot = document.getElementById('mail-dot');
+  if (dot) dot.style.display = (gar.log.length > (gar.mailSeen || 0)) ? 'block' : 'none';
+}
+function mailRender() {
+  const el = document.getElementById('mail-in');
+  el.innerHTML = `
+    <h2>ПОЧТОВЫЙ ЯЩИК <span>· журнал событий</span></h2>
+    <div class="sub">налёты на тебя и твои — асики, пыль, электричество. Хранится последние ${RAID_LOG_MAX}.</div>
+    ${gar.log.length ? `<div style="display:flex;flex-direction:column;gap:7px">
+      ${gar.log.map(e => `<div class="mail-item" style="border-color:${
+        e.kind === 'out' ? 'var(--green)' : e.kind === 'in' ? 'var(--red)' : 'var(--amber)'}">
+        <div>${MAIL_ICONS[e.kind] || '•'} ${e.text}</div>
+        <div class="mt">${new Date(e.t).toLocaleString('ru', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</div>
+      </div>`).join('')}
+    </div>` : '<div class="mail-empty">Пока пусто — ни налётов, ни поломок. Хорошие новости — это тоже новости.</div>'}`;
+}
+document.getElementById('mail-close').onclick = mailClose;
+document.getElementById('mail').addEventListener('mousedown', e => { if (e.target === document.getElementById('mail')) mailClose(); });
 
 function spendBand(n, what) {
   if (MY.band < n) { SFX.fail(); toast(`Не хватает BAND: нужно ${Math.round(n).toLocaleString('ru')}, есть ${Math.round(MY.band).toLocaleString('ru')}.`); return false; }
@@ -5144,6 +5341,7 @@ function maybeBreak() {
   if (gar.dust >= .99) {
     gar.broken = true; gar.cond = .7;
     toast('Перегрев: один асик деградировал, хешрейт −30%. Нужен ремонт.');
+    logEvent('dust', 'Перегрев из-за пыли — асик деградировал, хешрейт −30%. Нужен ремонт.');
   }
 }
 
@@ -5162,6 +5360,7 @@ setInterval(() => {                    // «сутки» тикают, даже 
     if (!wasWarm && !gar._powerWarned) {
       gar._powerWarned = true;
       toast('Счёт за свет съел всю несобранную добычу — асики жрут ток, даже пока в пыли. Продуй и собирай чаще.');
+      logEvent('power', 'Счёт за свет съел всю несобранную добычу.');
     } else if (wasWarm) gar._powerWarned = false;
   }
   maybeBreak();
@@ -5602,7 +5801,7 @@ function bindShop() {
     }
   };
   if ($('s-fix')) $('s-fix').onclick = () => {
-    if (spendBand(REPAIR_COST)) { gar.broken = false; gar.cond = 1; toast('Отремонтировано, хешрейт вернулся.'); shopRender(); }
+    if (spendBand(REPAIR_COST)) { gar.broken = false; gar.cond = 1; toast('Отремонтировано, хешрейт вернулся.'); logEvent('fix', 'Ремонт завершён — хешрейт вернулся к 100%.'); shopRender(); }
   };
   if ($('s-fan')) $('s-fan').onclick = () => {
     if (spendBand(FAN_COST)) { gar.fan = true; toast('Вентилятор поставлен: пыль копится вдвое медленнее.'); shopRender(); }
