@@ -620,6 +620,13 @@ const ART_SRC = {
   symWolf:'sym_wolf.png', symAnchor:'sym_anchor.png', symRing:'sym_ring.png',
   symPick:'sym_pickaxe.png', symSkull:'sym_skull.png',
   crest:'icon_gang.png',
+  /* 14.08 (просьба «сделай новые картинки, поищи красивые игры»): очередь в
+     bandy_art/queue.txt пополнена — ключи заведены заранее, ok() отфильтрует
+     отсутствующие файлы, ничего не сломается, пока картинок нет на диске. */
+  mailboxArt:'mailbox_ganggang.png', plaqueCoin:'plaque_bandcoin.png',
+  guardBumFull:'guard_bum_full.png', guardAthleteFull:'guard_athlete_full.png',
+  propToolrack:'prop_toolrack.png', propTirestack:'prop_tirestack.png',
+  propOildrum:'prop_oildrum.png', propCablespool:'prop_cablespool.png',
   cloud:'cloud.png', dust:'dustcloud.png', hotel:'hotel_tower.png',
   texFloor:'tex_concrete_v2.jpg', texRoad:'tex_asphalt_v2.jpg', texWall:'tex_metal_panel_v2.jpg',
   street:'bg_loading.jpg',
@@ -2586,7 +2593,7 @@ function guardSprites() {
     const w = WEAPON_TYPES.find(x => x.id === g.weapon);
     const [ti, tj] = GUARD_SLOTS[i % GUARD_SLOTS.length];
     return { name: `${t.name} №${i + 1}`, role: w ? w.name : 'без оружия',
-             c: GUARD_COLORS[g.type], ti, tj, smoke: false, av: t.avKey, guardIndex: i };
+             c: GUARD_COLORS[g.type], ti, tj, smoke: false, av: t.avKey, full: t.fullKey, guardIndex: i };
   });
 }
 gar.mercs = [];
@@ -2783,18 +2790,22 @@ function drawGarage() {
     const lglow = GC.createRadialGradient(lx2, ly2, 0, lx2, ly2, lr * 2.1);
     lglow.addColorStop(0, 'rgba(245,197,66,.20)'); lglow.addColorStop(1, 'rgba(245,197,66,0)');
     GC.fillStyle = lglow; GC.beginPath(); GC.arc(lx2, ly2, lr * 2.1, 0, 7); GC.fill();
-    GC.fillStyle = '#161310';
-    GC.beginPath(); GC.arc(lx2, ly2, lr, 0, 7); GC.fill();
-    GC.strokeStyle = P.gold; GC.lineWidth = 3; GC.stroke();
-    GC.strokeStyle = 'rgba(0,0,0,.5)'; GC.lineWidth = 1; GC.beginPath(); GC.arc(lx2, ly2, lr - 3, 0, 7); GC.stroke();
-    if (ok(ART.coin)) {
-      GC.save();
-      GC.beginPath(); GC.arc(lx2, ly2, lr * .74, 0, 7); GC.clip();
-      GC.drawImage(ART.coin, lx2 - lr * .74, ly2 - lr * .74, lr * 1.48, lr * 1.48);
-      GC.restore();
+    if (ok(ART.plaqueCoin)) {                       // готовая сгенерённая плашка целиком
+      GC.drawImage(ART.plaqueCoin, lx2 - lr * 1.15, ly2 - lr * 1.15, lr * 2.3, lr * 2.3);
     } else {
-      GC.fillStyle = P.gold; GC.font = '700 ' + (lr * .62 | 0) + 'px Segoe UI';
-      GC.textAlign = 'center'; GC.fillText('₿', lx2, ly2 + lr * .22);
+      GC.fillStyle = '#161310';
+      GC.beginPath(); GC.arc(lx2, ly2, lr, 0, 7); GC.fill();
+      GC.strokeStyle = P.gold; GC.lineWidth = 3; GC.stroke();
+      GC.strokeStyle = 'rgba(0,0,0,.5)'; GC.lineWidth = 1; GC.beginPath(); GC.arc(lx2, ly2, lr - 3, 0, 7); GC.stroke();
+      if (ok(ART.coin)) {
+        GC.save();
+        GC.beginPath(); GC.arc(lx2, ly2, lr * .74, 0, 7); GC.clip();
+        GC.drawImage(ART.coin, lx2 - lr * .74, ly2 - lr * .74, lr * 1.48, lr * 1.48);
+        GC.restore();
+      } else {
+        GC.fillStyle = P.gold; GC.font = '700 ' + (lr * .62 | 0) + 'px Segoe UI';
+        GC.textAlign = 'center'; GC.fillText('₿', lx2, ly2 + lr * .22);
+      }
     }
     GC.font = '700 ' + (S * .075 | 0) + 'px Segoe UI'; GC.textAlign = 'center';
     GC.fillStyle = 'rgba(230,232,240,.85)';
@@ -2826,6 +2837,10 @@ function drawGarage() {
       GC.clip();
       const rx0 = Math.min(px(0), px(1)), rx1 = Math.max(px(0), px(1));
       texFill(GC, brickTile(), rx0, py(0) - WH, rx1 - rx0, WH + th, .96, .60);
+      /* тень у пола — та же грамматика, что и на левой стене: кладка не висит в воздухе */
+      const shg2 = GC.createLinearGradient(0, py(0) - S * .5, 0, py(0));
+      shg2.addColorStop(0, 'rgba(0,0,0,0)'); shg2.addColorStop(1, 'rgba(0,0,0,.34)');
+      GC.fillStyle = shg2; GC.fillRect(rx0, py(0) - WH, rx1 - rx0, WH + th);
       GC.restore();
     }
 
@@ -2837,23 +2852,27 @@ function drawGarage() {
       const mw = S * .30, mh = S * .34;
       GC.save();
       shadowUnder(GC, mx2, my2 + mh * .45, S * .22, .22);
-      GC.fillStyle = '#1c1f2c';                       // корпус ящика
-      GC.beginPath(); GC.roundRect(mx2 - mw / 2, my2 - mh / 2, mw, mh, S * .035); GC.fill();
-      GC.strokeStyle = 'rgba(0,0,0,.55)'; GC.lineWidth = 1.5; GC.stroke();
-      GC.fillStyle = '#262a3c';                        // крышка чуть приоткрыта
-      GC.beginPath();
-      GC.moveTo(mx2 - mw / 2, my2 - mh / 2);
-      GC.lineTo(mx2 + mw / 2, my2 - mh / 2);
-      GC.lineTo(mx2 + mw / 2 - S * .02, my2 - mh / 2 - S * .07);
-      GC.lineTo(mx2 - mw / 2 + S * .02, my2 - mh / 2 - S * .07);
-      GC.closePath(); GC.fill();
-      GC.strokeStyle = 'rgba(0,0,0,.5)'; GC.lineWidth = 1; GC.stroke();
-      GC.fillStyle = '#0d0f18';                         // прорезь
-      GC.beginPath(); GC.roundRect(mx2 - mw * .32, my2 - mh * .06, mw * .64, mh * .12, 2); GC.fill();
-      GC.fillStyle = P.gold; GC.font = '700 ' + (S * .075 | 0) + 'px Segoe UI';
-      GC.textAlign = 'center'; GC.fillText('ПОЧТА', mx2, my2 + mh * .30);
-      GC.strokeStyle = 'rgba(245,197,66,.4)'; GC.lineWidth = 1;
-      GC.strokeRect(mx2 - mw / 2, my2 - mh / 2, mw, mh);
+      if (ok(ART.mailboxArt)) {                        // готовая сгенерённая картинка целиком
+        GC.drawImage(ART.mailboxArt, mx2 - mw * .7, my2 - mh * .7, mw * 1.4, mh * 1.4);
+      } else {
+        GC.fillStyle = '#1c1f2c';                       // корпус ящика
+        GC.beginPath(); GC.roundRect(mx2 - mw / 2, my2 - mh / 2, mw, mh, S * .035); GC.fill();
+        GC.strokeStyle = 'rgba(0,0,0,.55)'; GC.lineWidth = 1.5; GC.stroke();
+        GC.fillStyle = '#262a3c';                        // крышка чуть приоткрыта
+        GC.beginPath();
+        GC.moveTo(mx2 - mw / 2, my2 - mh / 2);
+        GC.lineTo(mx2 + mw / 2, my2 - mh / 2);
+        GC.lineTo(mx2 + mw / 2 - S * .02, my2 - mh / 2 - S * .07);
+        GC.lineTo(mx2 - mw / 2 + S * .02, my2 - mh / 2 - S * .07);
+        GC.closePath(); GC.fill();
+        GC.strokeStyle = 'rgba(0,0,0,.5)'; GC.lineWidth = 1; GC.stroke();
+        GC.fillStyle = '#0d0f18';                         // прорезь
+        GC.beginPath(); GC.roundRect(mx2 - mw * .32, my2 - mh * .06, mw * .64, mh * .12, 2); GC.fill();
+        GC.fillStyle = P.gold; GC.font = '700 ' + (S * .075 | 0) + 'px Segoe UI';
+        GC.textAlign = 'center'; GC.fillText('ПОЧТА', mx2, my2 + mh * .30);
+        GC.strokeStyle = 'rgba(245,197,66,.4)'; GC.lineWidth = 1;
+        GC.strokeRect(mx2 - mw / 2, my2 - mh / 2, mw, mh);
+      }
       /* флажок — красный, если есть непрочитанные события; серый, если пусто */
       GC.save(); GC.translate(mx2 + mw / 2, my2 - mh * .08);
       GC.strokeStyle = '#7a7f96'; GC.lineWidth = 2;
@@ -3085,6 +3104,21 @@ function drawGarage() {
     CX.moveTo(a3[0], a3[1] - rh); CX.lineTo(a2[0], a2[1] - rh);
     CX.lineTo(a2[0], a2[1]); CX.lineTo(a3[0], a3[1]);
     CX.closePath(); CX.fill();
+    /* неоновая кромка под полкой (14.08: «как в лучших играх» — тонкая
+       светящаяся полоса вдоль торца, дешёвый и надёжный приём для «геймерского»
+       индустриального стеллажа, не зависит от арт-генератора). */
+    CX.save();
+    CX.strokeStyle = '#5fd0ff'; CX.lineWidth = 2;
+    CX.shadowColor = '#5fd0ff'; CX.shadowBlur = 8;
+    CX.globalAlpha = .55 + .25 * Math.sin(T * 2.2 + rj);
+    CX.beginPath(); CX.moveTo(a3[0], a3[1] - 1); CX.lineTo(a2[0], a2[1] - 1); CX.stroke();
+    CX.restore();
+    CX.globalAlpha = .16 + .06 * Math.sin(T * 2.2 + rj);
+    CX.fillStyle = '#5fd0ff';
+    CX.beginPath();
+    CX.moveTo(a3[0], a3[1]); CX.lineTo(a2[0], a2[1]);
+    CX.lineTo(a2[0], a2[1] + S * .12); CX.lineTo(a3[0], a3[1] + S * .12);
+    CX.closePath(); CX.fill(); CX.globalAlpha = 1;
     CX.strokeStyle = 'rgba(150,165,220,.30)'; CX.lineWidth = 1;
     CX.beginPath(); CX.moveTo(a0[0], a0[1] - rh); CX.lineTo(a1[0], a1[1] - rh); CX.stroke();
     /* тёплая рабочая подсветка над полкой — без неё стеллаж терялся в темноте */
@@ -3194,6 +3228,56 @@ function drawGarage() {
     }
   }
 
+  /* 14.08 (просьба «гараж — наше лицо, самое красивое место»): пара
+     захламляющих предметов на свободном полу справа от стойки с асиками —
+     референсы мастерских (ArtStation/Pinterest) показывают, что пустой пол
+     читается дёшево, а мелкий хлам держит взгляд. Готовые картинки заведены
+     в очередь (prop_tirestack/prop_oildrum), пока их нет — рисуем кодом. */
+  {
+    const [x, y] = at(3.5, 1.1);
+    if (ok(ART.propTirestack)) {
+      shadowUnder(CX, x, y + th * .2, S * .3, .4);
+      spr(CX, ART.propTirestack, x, y + th * .22, S * .5, .95);
+    } else {
+      shadowUnder(CX, x, y + th * .18, S * .32, .4);
+      for (let k = 0; k < 3; k++) {
+        const ty = y - k * S * .10;
+        CX.save(); CX.translate(x, ty); CX.scale(1, .42);
+        CX.fillStyle = '#111116'; CX.beginPath(); CX.arc(0, 0, S * .21, 0, 7); CX.fill();
+        CX.fillStyle = '#1c1c22'; CX.beginPath(); CX.arc(0, 0, S * .21, 0, 7); CX.lineWidth = S * .09; CX.strokeStyle = '#1c1c22'; CX.stroke();
+        CX.fillStyle = '#000'; CX.beginPath(); CX.arc(0, 0, S * .095, 0, 7); CX.fill();
+        CX.restore();
+      }
+      CX.globalAlpha = .18; CX.fillStyle = '#fff';
+      CX.beginPath(); CX.ellipse(x - S * .1, y - S * .24, S * .07, S * .025, .4, 0, 7); CX.fill();
+      CX.globalAlpha = 1;
+    }
+  }
+  {
+    const [x, y] = at(4.35, .95);
+    if (ok(ART.propOildrum)) {
+      shadowUnder(CX, x, y + th * .18, S * .22, .4);
+      spr(CX, ART.propOildrum, x, y + th * .2, S * .40, .95);
+    } else {
+      shadowUnder(CX, x, y + th * .18, S * .2, .42);
+      const dw = S * .24, dh = S * .42;
+      CX.fillStyle = '#5a2c1e';
+      CX.beginPath(); CX.roundRect(x - dw / 2, y - dh, dw, dh, S * .03); CX.fill();
+      CX.fillStyle = '#e2b23a'; CX.globalAlpha = .85;      // предупреждающая полоса
+      CX.fillRect(x - dw / 2, y - dh * .58, dw, dh * .12);
+      CX.globalAlpha = 1;
+      CX.fillStyle = 'rgba(0,0,0,.35)';
+      CX.fillRect(x - dw / 2, y - dh, dw * .32, dh);         // тень с одной стороны
+      CX.save(); CX.translate(x, y - dh); CX.scale(1, .45);
+      CX.fillStyle = '#6b3626'; CX.beginPath(); CX.arc(0, 0, dw / 2, 0, 7); CX.fill();
+      CX.strokeStyle = 'rgba(0,0,0,.4)'; CX.lineWidth = 1.4; CX.stroke();
+      CX.restore();
+      CX.globalAlpha = .25; CX.fillStyle = '#fff';
+      CX.fillRect(x - dw * .32, y - dh * .92, dw * .12, dh * .8);
+      CX.globalAlpha = 1;
+    }
+  }
+
   /* склад: угол с золотом + сейф */
   {
     const [x, y] = at(4.6, 3.9);
@@ -3265,6 +3349,22 @@ function drawGarage() {
     CX.save(); CX.translate(mx, my); CX.scale(1, .5);
     CX.fillStyle = 'rgba(0,0,0,.42)';
     CX.beginPath(); CX.arc(0, 0, S * .17, 0, 7); CX.fill(); CX.restore();
+
+    /* если для этого типа охраны сгенерилась готовая фигура в полный рост
+       (bandy_art/queue.txt, 14.08) — используем её вместо процедурной,
+       та остаётся запасным вариантом, пока картинки нет на диске. */
+    const fullArt = mrc.full && ART[mrc.full];
+    if (ok(fullArt)) {
+      spr(CX, fullArt, mx, my, S * .62, 1, 'bottom');
+      CX.font = '700 ' + Math.max(9, S * .085 | 0) + 'px Segoe UI';
+      CX.textAlign = 'center';
+      CX.fillStyle = 'rgba(230,232,240,.92)';
+      CX.fillText(tr(mrc.name), mx, my - S * 1.02);
+      CX.font = (Math.max(8, S * .07 | 0)) + 'px Segoe UI';
+      CX.fillStyle = 'rgba(125,132,160,.85)';
+      CX.fillText(tr(mrc.role), mx, my - S * .93);
+      continue;
+    }
 
     /* тон куртки: тёмный/светлый вариант для тени и света по бокам фигуры */
     const cDark = shade(mrc.c, .68), cLight = shade(mrc.c, 1.22);
@@ -3380,13 +3480,24 @@ function drawGarage() {
     CX.beginPath(); CX.arc(0, 0, 4, 0, 7); CX.fill(); CX.restore();
   }
 
-  /* виньетка */
+  /* виньетка + лёгкая цветокоррекция (14.08: «должно быть самое красивое
+     место» — референсы мастерских/гаражей в топовых играх держат контраст
+     через тёмные углы и чуть холодный край против тёплого центра). */
   if (!drawGarage._vg || drawGarage._vgKey !== W + 'x' + H) {
-    const vg = CX.createRadialGradient(W / 2, H / 2, S * 2, W / 2, H / 2, Math.max(W, H) * .72);
-    vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.55)');
+    const vg = CX.createRadialGradient(W / 2, H * .46, S * 1.6, W / 2, H / 2, Math.max(W, H) * .70);
+    vg.addColorStop(0, 'rgba(20,14,8,0)');
+    vg.addColorStop(.6, 'rgba(8,8,14,.10)');
+    vg.addColorStop(1, 'rgba(4,5,12,.62)');
     drawGarage._vg = vg; drawGarage._vgKey = W + 'x' + H;
   }
   CX.fillStyle = drawGarage._vg; CX.fillRect(0, 0, W, H);
+  /* едва заметный тёплый оттенок в зоне света — не красит всё подряд, только усиливает уже тёплый луч */
+  CX.save();
+  CX.globalCompositeOperation = 'soft-light';
+  const wg = CX.createRadialGradient(W / 2, H * .40, 0, W / 2, H * .40, Math.max(W, H) * .45);
+  wg.addColorStop(0, 'rgba(255,190,120,.28)'); wg.addColorStop(1, 'rgba(255,190,120,0)');
+  CX.fillStyle = wg; CX.fillRect(0, 0, W, H);
+  CX.restore();
 }
 
 /* ======================= ЖИЗНЬ ГОРОДА ====================================
@@ -5171,8 +5282,8 @@ const RAID_ATTACK_COST = D(0.10);                     // цена самой а�
    принцип, что и у склада (WH_PCT максимум .92 в модели).                   */
 const GUARD_CAP = 10;
 const GUARD_TYPES = [
-  { id: 'bum',     name: 'Бомж',      avKey: 'avDvornik', avFile: 'av_dvornik.png', hire: D(2.0), def: .06 },
-  { id: 'athlete', name: 'Спортсмен', avKey: 'avBoec',    avFile: 'av_boec.png',    hire: D(6.0), def: .13 },
+  { id: 'bum',     name: 'Бомж',      avKey: 'avDvornik', avFile: 'av_dvornik.png', hire: D(2.0), def: .06, fullKey: 'guardBumFull' },
+  { id: 'athlete', name: 'Спортсмен', avKey: 'avBoec',    avFile: 'av_boec.png',    hire: D(6.0), def: .13, fullKey: 'guardAthleteFull' },
 ];
 const WEAPON_TYPES = [
   { id: 'stick', name: 'Дубинка', band: D(1.0), usdt: 1.5, def: .05 },
